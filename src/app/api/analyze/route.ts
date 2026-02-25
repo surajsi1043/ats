@@ -3,6 +3,8 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 
+await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
+
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 async function extractTextFromPDF(buffer: Buffer): Promise<string> {
