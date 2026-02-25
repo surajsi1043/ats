@@ -1,16 +1,15 @@
-// src/app/api/analyze/route.ts
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
+import { extractText } from "unpdf";
 
-// DO NOT use "import pdf from 'pdf-parse'" at the top
+// Initialize the Google Generative AI client
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
-async function extractTextFromPDF(buffer: Buffer): Promise<string> {
+async function extractTextFromPDF(data: Uint8Array): Promise<string> {
   try {
-    // Use require inside the function to avoid build-time bundling issues
-    const pdf = require("pdf-parse");
-    const data = await pdf(buffer);
-    return data.text;
+    // unpdf requires Uint8Array specifically
+    const { text } = await extractText(data);
+    return text;
   } catch (error) {
     console.error("PDF Parsing Error:", error);
     throw new Error("Failed to extract text from PDF");
@@ -27,12 +26,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing resume or JD" }, { status: 400 });
     }
 
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    const resume_text = await extractTextFromPDF(buffer);
+    // Convert the file's ArrayBuffer to a Uint8Array
+    const arrayBuffer = await file.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+    
+    const resume_text = await extractTextFromPDF(uint8Array);
 
-    // Using the 1.5-flash model as a reliable identifier
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    // FIXED: Using a current supported model identifier for 2026
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     const prompt = `
       You are an expert Indian Technical Recruiter. Analyze this resume against the Job Description (JD).
@@ -44,21 +45,24 @@ export async function POST(req: Request) {
       {
         "score": (0-100),
         "missing_keywords": ["tech skill", "soft skill"],
-        "indian_market_tips": ["specific advice for Indian market"],
+        "indian_market_tips": ["specific advice for Indian market like notice period, CGPA, etc."],
         "verdict": "Strong Match" | "Moderate Match" | "Weak Match"
       }
     `;
 
     const result = await model.generateContent(prompt);
     const responseText = result.response.text();
+    
+    // Clean JSON response from AI Markdown formatting
     const cleanedJson = responseText.replace(/```json|```/g, "").trim();
     
     return NextResponse.json(JSON.parse(cleanedJson));
   } catch (error: any) {
     console.error("Analysis error:", error);
+    // Enhanced error reporting to distinguish between 404 (retired model) and 429 (quota)
     return NextResponse.json(
       { error: `AI Analysis failed: ${error.message || "Unknown error"}` }, 
-      { status: 500 }
+      { status: error.status || 500 }
     );
   }
-} 
+}
