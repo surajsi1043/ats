@@ -1,37 +1,15 @@
-
-
-import "path2d-polyfill";
-// @ts-ignore
-global.DOMMatrix = require("canvas").DOMMatrix;
+// src/app/api/analyze/route.ts
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
-import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
-
-await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
+// @ts-ignore
+import pdf from "pdf-parse";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 async function extractTextFromPDF(buffer: Buffer): Promise<string> {
-  const Uint8ArrayBuffer = new Uint8Array(buffer);
-  const loadingTask = pdfjs.getDocument({
-    data: Uint8ArrayBuffer,
-    useSystemFonts: true,
-    disableFontFace: true,
-    verbosity: 0, 
-  });
-
-  const pdf = await loadingTask.promise;
-  let fullText = "";
-
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const page = await pdf.getPage(i);
-    const textContent = await page.getTextContent();
-    const pageText = textContent.items
-      .map((item: any) => item.str)
-      .join(" ");
-    fullText += pageText + "\n";
-  }
-  return fullText;
+  // pdf-parse is much more stable for Vercel/Node.js environments
+  const data = await pdf(buffer);
+  return data.text;
 }
 
 export async function POST(req: Request) {
@@ -48,9 +26,7 @@ export async function POST(req: Request) {
     const buffer = Buffer.from(bytes);
     const resume_text = await extractTextFromPDF(buffer);
 
-    // FIXED: Use a supported 2026 model identifier. 
-    // "gemini-1.5-flash" is retired; use "gemini-2.5-flash" or "gemini-3-flash".
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const prompt = `
       You are an expert Indian Technical Recruiter. Analyze this resume against the Job Description (JD).
@@ -74,10 +50,9 @@ export async function POST(req: Request) {
     return NextResponse.json(JSON.parse(cleanedJson));
   } catch (error: any) {
     console.error("Analysis error:", error);
-    // Enhanced error reporting to distinguish between 404 (retired model) and 429 (quota)
     return NextResponse.json(
       { error: `AI Analysis failed: ${error.message || "Unknown error"}` }, 
-      { status: error.status || 500 }
+      { status: 500 }
     );
   }
 }
