@@ -1,13 +1,13 @@
 // src/app/api/analyze/route.ts
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
-// @ts-ignore
-import pdf from "pdf-parse";
+// Use namespace import because pdf-parse doesn't have a default export
+import * as pdf from "pdf-parse";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 async function extractTextFromPDF(buffer: Buffer): Promise<string> {
-  // pdf-parse is much more stable for Vercel/Node.js environments
+  // @ts-ignore - call the imported namespace as a function
   const data = await pdf(buffer);
   return data.text;
 }
@@ -26,6 +26,7 @@ export async function POST(req: Request) {
     const buffer = Buffer.from(bytes);
     const resume_text = await extractTextFromPDF(buffer);
 
+    // Using a valid model identifier
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const prompt = `
