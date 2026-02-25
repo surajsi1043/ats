@@ -1,4 +1,8 @@
+
+
+import "path2d-polyfill";
 // @ts-ignore
+global.DOMMatrix = require("canvas").DOMMatrix;
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
