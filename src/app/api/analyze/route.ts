@@ -1,15 +1,20 @@
 // src/app/api/analyze/route.ts
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
-// Use namespace import because pdf-parse doesn't have a default export
-import * as pdf from "pdf-parse";
 
+// DO NOT use "import pdf from 'pdf-parse'" at the top
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 async function extractTextFromPDF(buffer: Buffer): Promise<string> {
-  // @ts-ignore - call the imported namespace as a function
-  const data = await pdf(buffer);
-  return data.text;
+  try {
+    // Use require inside the function to avoid build-time bundling issues
+    const pdf = require("pdf-parse");
+    const data = await pdf(buffer);
+    return data.text;
+  } catch (error) {
+    console.error("PDF Parsing Error:", error);
+    throw new Error("Failed to extract text from PDF");
+  }
 }
 
 export async function POST(req: Request) {
@@ -26,7 +31,7 @@ export async function POST(req: Request) {
     const buffer = Buffer.from(bytes);
     const resume_text = await extractTextFromPDF(buffer);
 
-    // Using a valid model identifier
+    // Using the 1.5-flash model as a reliable identifier
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const prompt = `
@@ -39,7 +44,7 @@ export async function POST(req: Request) {
       {
         "score": (0-100),
         "missing_keywords": ["tech skill", "soft skill"],
-        "indian_market_tips": ["specific advice for Indian market like notice period, CGPA, etc."],
+        "indian_market_tips": ["specific advice for Indian market"],
         "verdict": "Strong Match" | "Moderate Match" | "Weak Match"
       }
     `;
@@ -56,4 +61,4 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
-}
+} 
